@@ -1,0 +1,124 @@
+mql5
+//+------------------------------------------------------------------+
+//|                                                      RSI crossmarket |
+//|                                   https://www.forexroboteasy.com |
+//|                                             Forex Robot Easy Team |
+//+------------------------------------------------------------------+
+
+//--- Input parameters
+input int RSI_Period = 14;              // RSI period
+input double RSI_Threshold = 70.0;      // RSI threshold for market selection
+input double StopLoss_Percentage = 2.0; // Stop Loss percentage
+input double TakeProfit_Percentage = 4.0; // Take Profit percentage
+
+//--- Global variables
+int ticket = 0;                         // Order ticket
+double stopLoss = 0.0;                  // Stop Loss level
+double takeProfit = 0.0;                // Take Profit level
+
+//+------------------------------------------------------------------+
+//| Custom indicator: RSI                                              |
+//+------------------------------------------------------------------+
+double RSI(int period)
+{
+   double sumGain = 0.0;
+   double sumLoss = 0.0;
+   double prevClose = Close[1];
+
+   for (int i = period; i > 0; i--)
+   {
+      double diff = Close[i] - prevClose;
+      prevClose = Close[i];
+
+      if (diff > 0)
+         sumGain += diff;
+      else
+         sumLoss += MathAbs(diff);
+   }
+
+   double RS = sumGain / sumLoss;
+   double RSI = 100 - (100 / (1 + RS));
+
+   return RSI;
+}
+
+//+------------------------------------------------------------------+
+//| Expert initialization function                                   |
+//+------------------------------------------------------------------+
+int OnInit()
+{
+   return(INIT_SUCCEEDED);
+}
+
+//+------------------------------------------------------------------+
+//| Expert deinitialization function                                 |
+//+------------------------------------------------------------------+
+void OnDeinit(const int reason)
+{
+}
+
+//+------------------------------------------------------------------+
+//| Expert tick function                                             |
+//+------------------------------------------------------------------+
+void OnTick()
+{
+   // Calculate RSI for each market
+   double rsiNZDUSD = RSI(RSI_Period, SYMBOL_NZDUSD, 0);
+   double rsiAUDUSD = RSI(RSI_Period, SYMBOL_AUDUSD, 0);
+   double rsiUSDCHF = RSI(RSI_Period, SYMBOL_USDCHF, 0);
+   double rsiGBPUSD = RSI(RSI_Period, SYMBOL_GBPUSD, 0);
+   double rsiUSDSGD = RSI(RSI_Period, SYMBOL_USDSGD, 0);
+   double rsiUSDCAD = RSI(RSI_Period, SYMBOL_USDCAD, 0);
+   double rsiEURUSD = RSI(RSI_Period, SYMBOL_EURUSD, 0);
+   double rsiXAGUSD = RSI(RSI_Period, SYMBOL_XAGUSD, 0);
+   double rsiXPTUSD = RSI(RSI_Period, SYMBOL_XPTUSD, 0);
+   double rsiXAUUSD = RSI(RSI_Period, SYMBOL_XAUUSD, 0);
+   double rsiUS500 = RSI(RSI_Period, SYMBOL_US500, 0);
+   double rsiUS30 = RSI(RSI_Period, SYMBOL_US30, 0);
+   double rsiF40 = RSI(RSI_Period, SYMBOL_F40, 0);
+
+   // Market selection
+   bool isRSIHigh = (rsiNZDUSD > RSI_Threshold || rsiAUDUSD > RSI_Threshold || rsiUSDCHF > RSI_Threshold ||
+                     rsiGBPUSD > RSI_Threshold || rsiUSDSGD > RSI_Threshold || rsiUSDCAD > RSI_Threshold ||
+                     rsiEURUSD > RSI_Threshold || rsiXAGUSD > RSI_Threshold || rsiXPTUSD > RSI_Threshold ||
+                     rsiXAUUSD > RSI_Threshold || rsiUS500 > RSI_Threshold || rsiUS30 > RSI_Threshold ||
+                     rsiF40 > RSI_Threshold);
+
+   // Order placement
+   if (isRSIHigh && ticket == 0)
+   {
+      ticket = OrderSend(Symbol(), OP_BUY, 1.0, Ask, 3, stopLoss, takeProfit, 'RSI Crossmarket', 0, 0, clrGreen);
+   }
+
+   // Position management
+   if (ticket > 0)
+   {
+      double currentPrice = SymbolInfoDouble(Symbol(), SYMBOL_BID);
+
+      // Stop Loss and Take Profit levels
+      stopLoss = currentPrice - (currentPrice * StopLoss_Percentage / 100);
+      takeProfit = currentPrice + (currentPrice * TakeProfit_Percentage / 100);
+
+      // Modify existing order
+      if (OrderModify(ticket, 0, stopLoss, takeProfit, 0))
+      {
+         Print('Order modified successfully');
+      }
+   }
+
+   // Trade monitoring
+   if (ticket > 0)
+   {
+      if (OrderSelect(ticket, SELECT_BY_TICKET, MODE_TRADES))
+      {
+         double profit = OrderProfit();
+         double drawdown = OrderDrawdown();
+
+         if (profit < 0 && drawdown > 100)
+         {
+            // Hedging
+            ticket = OrderSend(Symbol(), OP_SELL, 1.0, Bid, 3, stopLoss, takeProfit, 'Hedge', 0, 0, clrRed);
+         }
+      }
+   }
+}
